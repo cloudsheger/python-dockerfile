@@ -1,0 +1,66 @@
+ARG BASE_REGISTRY=registry.access.redhat.com
+ARG BASE_IMAGE=ubi8/ubi
+ARG BASE_TAG=8.7
+
+FROM ${BASE_REGISTRY}/${BASE_IMAGE}:${BASE_TAG}
+
+USER root
+# Set necessary environment variables for python and python development environment
+ARG APP_ROOT=/code
+ENV PYTHON_VERSION=3.9 \
+    APP_ROOT=$APP_ROOT \
+    HOME=${APP_ROOT} \
+    PATH=$HOME/.local/bin/:/code/app-root/src/bin:/code/app-root/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=UTF-8 \
+    PIP_NO_CACHE_DIR=off \
+    LANG=en_US.UTF-8
+
+# Install Python and other dependencies
+RUN dnf update -y && \
+    dnf install -y python${PYTHON_VERSION} && \
+    dnf clean all
+# Install pipenv
+RUN python${PYTHON_VERSION} -m ensurepip && \
+    python${PYTHON_VERSION} -m pip install --no-cache-dir pipenv
+
+
+WORKDIR /code
+# Create a user named Jenkins
+RUN useradd -ms /bin/bash jenkins
+
+# Add Jenkins to the sudo group (optional)
+RUN usermod -aG wheel jenkins
+
+#RUN export PIPENV_VENV_IN_PROJECT=1
+#USER jenkins
+
+
+# Copy the Pipfile and Pipfile.lock files
+COPY Pipfile* ./
+
+# Install Python dependencies
+#RUN python${PYTHON_VERSION} -m pipenv install --system --deploy --ignore-pipfile
+RUN pip${PYTHON_VERSION} install --user pipenv
+
+
+
+
+# Install Python dependencies including development dependencies
+RUN python${PYTHON_VERSION} -m pipenv install --dev
+
+# Copy the Python application code
+COPY . .
+
+RUN pipenv install black --dev
+RUN pipenv install pytest --dev
+RUN pipenv install coverage --dev
+
+# Ensure tool is available in your container's PATH
+#RUN "export PATH=/code/.local/bin:$PATH"
+
+#If you are serious about containerizing your application and running in production, 
+#you should consider using Red Hat Universal Base Image. 
+#UBI gives you greater reliability, security, and peace of mind for your containerized applications. 
+#And, you can freely distribute UBI-based containerized applications with your friends (and enemies) 
+#on both Red Hat and non-Red Hat platforms.
